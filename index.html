@@ -4,16 +4,18 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>ProxiSpeak | Audio Prototype</title>
+  <title>ProxiSpeak | Virtual Space</title>
   <link rel="stylesheet" href="style.css" />
 </head>
 <body>
   <main class="app">
-    <p class="eyebrow">PROXISPEAK · DAY 1</p>
-    <h1>Spatial Audio Lab</h1>
-    <p class="subtitle">
-      Experiment with how sound changes as avatars move apart.
-    </p>
+    <header class="app-header">
+      <p class="eyebrow">PROXISPEAK · PHASE 2</p>
+      <h1>Virtual Space</h1>
+      <p class="subtitle">
+        Move avatars around and explore proximity-based audio.
+      </p>
+    </header>
 
     <section class="panel">
       <div class="status-row">
@@ -22,29 +24,54 @@
       </div>
 
       <div class="controls">
-        <button id="playBtn">▶ Play sound</button>
-        <button id="stopBtn" class="secondary">■ Stop</button>
+        <button id="playBtn">▶ Start audio</button>
+        <button id="stopBtn" class="secondary">■ Stop audio</button>
       </div>
 
-      <label for="distance">Simulated avatar distance</label>
-      <div class="distance-row">
-        <input id="distance" type="range" min="0" max="500"
-          value="50" step="1" />
-        <strong><span id="distanceValue">50</span> px</strong>
+      <p class="instruction">
+        Drag an avatar to move it around the space.
+      </p>
+
+      <div id="space" class="space" aria-label="Virtual space">
+        <div class="avatar avatar-you"
+             id="avatarYou"
+             role="button"
+             tabindex="0"
+             aria-label="Your avatar">
+          <span class="avatar-icon">Y</span>
+          <span class="avatar-name">You</span>
+        </div>
+
+        <div class="avatar avatar-alex"
+             id="avatarAlex"
+             role="button"
+             tabindex="0"
+             aria-label="Alex's avatar">
+          <span class="avatar-icon">A</span>
+          <span class="avatar-name">Alex</span>
+        </div>
+
+        <div class="avatar avatar-sam"
+             id="avatarSam"
+             role="button"
+             tabindex="0"
+             aria-label="Sam's avatar">
+          <span class="avatar-icon">S</span>
+          <span class="avatar-name">Sam</span>
+        </div>
       </div>
 
-      <div class="meter">
-        <div class="meter-fill" id="volumeBar"></div>
-      </div>
-      <div class="status-row small">
-        <span>Relative volume</span>
-        <strong id="volumeValue">90%</strong>
+      <div class="avatar-info">
+        <h2>Avatar positions</h2>
+        <p>You: <strong id="youPosition">Loading...</strong></p>
+        <p>Alex: <strong id="alexPosition">Loading...</strong></p>
+        <p>Sam: <strong id="samPosition">Loading...</strong></p>
       </div>
     </section>
 
     <p class="note">
-      Prototype only: simulated distance and generated audio.
-      No microphone or network connection is used.
+      Prototype: avatars are simulated locally. No microphone or
+      network connection is used.
     </p>
   </main>
 

@@ -35,17 +35,22 @@ let audioContext = null;
 let audioNodes = [];
 let draggingAvatar = null;
 let selectedAvatarId = null;
+let pointerStart = null;
 
-function getAudioNode(avatarId) {
-  return audioNodes.find(node => node.id === avatarId);
+function getAudioNode(id) {
+  return audioNodes.find(node => node.id === id);
 }
 
 function getDistance(avatar) {
-  // The listener is simulated at the centre of the virtual space.
   const dx = (avatar.x - 0.5) * 2;
   const dy = (avatar.y - 0.5) * 2;
-
   return Math.sqrt(dx * dx + dy * dy);
+}
+
+function setStatus(message, color = "#65e6d2") {
+  if (!statusText) return;
+  statusText.textContent = message;
+  statusText.style.color = color;
 }
 
 function placeAvatar(avatar) {
@@ -54,7 +59,6 @@ function placeAvatar(avatar) {
 
   if (!element || !info || !space) return;
 
-  // Keep avatars inside the virtual space.
   avatar.x = Math.max(0.06, Math.min(0.94, avatar.x));
   avatar.y = Math.max(0.12, Math.min(0.88, avatar.y));
 
@@ -83,94 +87,70 @@ function updateAvatarAudio(avatar) {
   const dx = (avatar.x - 0.5) * 2;
   const distance = getDistance(avatar);
 
-  // Attenuate volume as the avatar moves away from the centre.
-  const volume = Math.max(
-    0.015,
-    0.25 / (1 + distance * 2.5)
-  );
+  // Only the selected avatar is audible.
+  const isSelected = avatar.id === selectedAvatarId;
+  const volume = isSelected
+    ? Math.max(0.015, 0.2 / (1 + distance * 2))
+    : 0;
 
   node.gain.gain.setTargetAtTime(
     volume,
     audioContext.currentTime,
-    0.08
+    0.06
   );
 
-  // Horizontal spatial position: left, centre or right.
   node.panner.positionX.setTargetAtTime(
     dx * 5,
     audioContext.currentTime,
-    0.08
+    0.06
   );
 
   node.panner.positionY.setTargetAtTime(
     0,
     audioContext.currentTime,
-    0.08
+    0.06
   );
 
   node.panner.positionZ.setTargetAtTime(
     -Math.max(1, distance * 5),
     audioContext.currentTime,
-    0.08
+    0.06
   );
 }
 
-function startDragging(event, avatar) {
-  if (event.button !== undefined && event.button !== 0) return;
+function selectAvatar(avatar) {
+  selectedAvatarId = avatar.id;
 
-  draggingAvatar = avatar;
-  event.currentTarget.setPointerCapture(event.pointerId);
-  event.preventDefault();
-}
+  if (!audioContext) {
+    setStatus(
+      `${avatar.name} selected — press Start Audio`,
+      "#65e6d2"
+    );
+    return;
+  }
 
-avatars.forEach(avatar => {
-  const element = document.getElementById(avatar.id);
-  if (!element) return;
+  avatars.forEach(updateAvatarAudio);
 
-  element.addEventListener("pointerdown", event => {
-    startDragging(event, avatar);
-  });
-
-  element.addEventListener("pointermove", event => {
-    if (draggingAvatar !== avatar) return;
-
-    const rect = space.getBoundingClientRect();
-
-    avatar.x = (event.clientX - rect.left) / rect.width;
-    avatar.y = (event.clientY - rect.top) / rect.height;
-
-    placeAvatar(avatar);
-  });
-
-  element.addEventListener("pointerup", () => {
-    draggingAvatar = null;
-  });
-
-  element.addEventListener("pointercancel", () => {
-    draggingAvatar = null;
-  });
-
-  element.addEventListener("keydown", event => {
-    const step = 0.025;
-
-    if (event.key === "ArrowLeft") avatar.x -= step;
-    else if (event.key === "ArrowRight") avatar.x += step;
-    else if (event.key === "ArrowUp") avatar.y -= step;
-    else if (event.key === "ArrowDown") avatar.y += step;
-    else return;
-
-    event.preventDefault();
-    placeAvatar(avatar);
-  });
-});
-
-function setStatus(message, color) {
-  statusText.textContent = message;
-  statusText.style.color = color;
+  setStatus(
+    `Playing ${avatar.name} — ${avatar.frequency} Hz`,
+    "#65e6d2"
+  );
 }
 
 async function startAudio() {
-  if (audioContext) return;
+  if (audioContext) {
+    if (audioContext.state === "suspended") {
+      await audioContext.resume();
+    }
+
+    if (!selectedAvatarId) {
+      selectAvatar(avatars[0]);
+    } else {
+      avatars.forEach(updateAvatarAudio);
+    }
+
+    return;
+  }
 
   try {
     audioContext = new (
@@ -193,7 +173,6 @@ async function startAudio() {
       panner.maxDistance = 100;
       panner.rolloffFactor = 0;
 
-      // Start silent; updateAvatarAudio sets the actual volume.
       gain.gain.value = 0;
 
       oscillator.connect(gain);
@@ -210,21 +189,24 @@ async function startAudio() {
       });
     });
 
-    updateAllAvatars();
-
-    setStatus("Playing — all avatars", "#65e6d2");
-  } catch (error) {
-    console.error("Could not start audio:", error);
-
-    const failedContext = audioContext;
-    audioContext = null;
-    audioNodes = [];
-
-    if (failedContext) {
-      await failedContext.close().catch(() => {});
+    if (!selectedAvatarId) {
+      selectedAvatarId = avatars[0].id;
     }
 
-    setStatus("Audio error", "#ff7070");
+    updateAllAvatars();
+
+    const selected = avatars.find(
+      avatar => avatar.id === selectedAvatarId
+    );
+
+    setStatus(
+      `Playing ${selected ? selected.name : "avatar"}`,
+      "#65e6d2"
+    );
+  } catch (error) {
+    console.error("Could not start audio:", error);
+    await stopAudio();
+    setStatus("Audio error — check the console", "#ff7070");
   }
 }
 
@@ -242,79 +224,102 @@ async function stopAudio() {
   setStatus("Stopped", "#f5bf68");
 }
 
-async function testAvatar(avatar) {
-  // Stop the previous audio session before testing another tone.
-  await stopAudio();
+avatars.forEach(avatar => {
+  const element = document.getElementById(avatar.id);
+  if (!element || !space) return;
 
-  try {
-    audioContext = new (
-      window.AudioContext || window.webkitAudioContext
-    )();
+  element.addEventListener("pointerdown", event => {
+    if (event.button !== undefined && event.button !== 0) return;
 
-    await audioContext.resume();
+    draggingAvatar = avatar;
+    pointerStart = {
+      x: event.clientX,
+      y: event.clientY,
+      moved: false
+    };
 
-    const oscillator = audioContext.createOscillator();
-    const gain = audioContext.createGain();
-    const panner = audioContext.createPanner();
-
-    oscillator.type = "sine";
-    oscillator.frequency.value = avatar.frequency;
-
-    panner.panningModel = "HRTF";
-
-    const dx = (avatar.x - 0.5) * 2;
-
-    panner.positionX.value = dx * 5;
-    panner.positionY.value = 0;
-    panner.positionZ.value = -2;
-
-    gain.gain.value = 0.15;
-
-    oscillator.connect(gain);
-    gain.connect(panner);
-    panner.connect(audioContext.destination);
-
-    audioNodes.push({
-      id: avatar.id,
-      oscillator,
-      gain,
-      panner
-    });
-
-    oscillator.start();
-
-    selectedAvatarId = avatar.id;
-    setStatus(
-      `Testing ${avatar.name} — ${avatar.frequency} Hz`,
-      "#65e6d2"
-    );
-  } catch (error) {
-    console.error("Could not test avatar audio:", error);
-
-    const failedContext = audioContext;
-    audioContext = null;
-    audioNodes = [];
-
-    if (failedContext) {
-      await failedContext.close().catch(() => {});
+    if (element.setPointerCapture) {
+      element.setPointerCapture(event.pointerId);
     }
 
-    setStatus("Audio error", "#ff7070");
+    event.preventDefault();
+  });
+
+  element.addEventListener("pointermove", event => {
+    if (draggingAvatar !== avatar || !pointerStart) return;
+
+    const distanceMoved = Math.hypot(
+      event.clientX - pointerStart.x,
+      event.clientY - pointerStart.y
+    );
+
+    if (distanceMoved > 5) {
+      pointerStart.moved = true;
+    }
+
+    if (!pointerStart.moved) return;
+
+    const rect = space.getBoundingClientRect();
+
+    avatar.x = (event.clientX - rect.left) / rect.width;
+    avatar.y = (event.clientY - rect.top) / rect.height;
+
+    placeAvatar(avatar);
+  });
+
+  function finishPointer() {
+    if (draggingAvatar !== avatar) return;
+
+    // A short press selects the avatar; a drag moves it.
+    if (pointerStart && !pointerStart.moved) {
+      selectAvatar(avatar);
+    }
+
+    draggingAvatar = null;
+    pointerStart = null;
   }
-}
+
+  element.addEventListener("pointerup", finishPointer);
+
+  element.addEventListener("pointercancel", () => {
+    draggingAvatar = null;
+    pointerStart = null;
+  });
+
+  element.addEventListener("keydown", event => {
+    const step = 0.025;
+
+    if (event.key === "ArrowLeft") avatar.x -= step;
+    else if (event.key === "ArrowRight") avatar.x += step;
+    else if (event.key === "ArrowUp") avatar.y -= step;
+    else if (event.key === "ArrowDown") avatar.y += step;
+    else if (event.key === "Enter" || event.key === " ") {
+      event.preventDefault();
+      selectAvatar(avatar);
+      return;
+    } else {
+      return;
+    }
+
+    event.preventDefault();
+    placeAvatar(avatar);
+  });
+});
 
 playBtn.addEventListener("click", startAudio);
 stopBtn.addEventListener("click", stopAudio);
 
-// Expose the test function for the optional buttons below.
+window.addEventListener("resize", updateAllAvatars);
+
 window.testProxiSpeakAvatar = name => {
   const avatar = avatars.find(
     item => item.name.toLowerCase() === name.toLowerCase()
   );
 
-  if (avatar) testAvatar(avatar);
+  if (avatar) {
+    selectAvatar(avatar);
+    return startAudio();
+  }
 };
-
-window.addEventListener("resize", updateAllAvatars);
 
 updateAllAvatars();
