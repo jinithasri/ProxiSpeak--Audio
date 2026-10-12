@@ -4,101 +4,215 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
+
   <title>ProxiSpeak Room Audio Test</title>
+
   <style>
+    * {
+      box-sizing: border-box;
+    }
+
     body {
       font-family: Arial, sans-serif;
       background: #101820;
       color: #f3f6fa;
       padding: 24px;
-      max-width: 700px;
+      max-width: 760px;
       margin: auto;
     }
+
+    h1 {
+      color: #65e6d2;
+    }
+
     button {
-      padding: 10px 14px;
-      margin: 5px;
-      border: 0;
+      padding: 12px 18px;
+      margin: 5px 0;
+      border: none;
       border-radius: 8px;
+      background: #65e6d2;
+      color: #101820;
+      font-weight: bold;
       cursor: pointer;
     }
+
+    button:hover {
+      opacity: 0.85;
+    }
+
     pre {
       background: #202c38;
-      padding: 16px;
+      padding: 18px;
       border-radius: 10px;
       white-space: pre-wrap;
+      overflow-wrap: anywhere;
+      line-height: 1.8;
+    }
+
+    .note {
+      color: #b7c5d4;
       line-height: 1.6;
     }
   </style>
 </head>
+
 <body>
   <h1>ProxiSpeak Room Test</h1>
-  <p>Testing who can hear whom under our room rules.</p>
 
-  <button id="runTests">Run Room Tests</button>
-  <pre id="results">Click "Run Room Tests" to begin.</pre>
+  <p class="note">
+    Testing room isolation, workspace proximity, room transitions,
+    and mute behavior.
+  </p>
 
-  <script src="audio-engine.js"></script>
+  <button id="runTests">Run All 7 Tests</button>
+
+  <pre id="results" aria-live="polite">Click "Run All 7 Tests" to begin.</pre>
+
+  <!-- Load the room-aware audio policy -->
+  <script src="./audio-engine.js"></script>
+
   <script>
     const output = document.getElementById("results");
+    const runButton = document.getElementById("runTests");
 
-    document.getElementById("runTests").addEventListener("click", () => {
-      const engine = new window.ProxiSpeakAudioEngine();
-
-      engine.addParticipant("You", {
-        roomId: "workspace", x: 0.2, y: 0.2
-      });
-
-      engine.addParticipant("Alex", {
-        roomId: "workspace", x: 0.3, y: 0.2
-      });
-
-      engine.addParticipant("Sam", {
-        roomId: "meetingRoom1", x: 0.5, y: 0.5
-      });
-
-      engine.addParticipant("Riya", {
-        roomId: "meetingRoom1", x: 0.6, y: 0.5
-      });
-
-      engine.addParticipant("Max", {
-        roomId: "meetingRoom2", x: 0.5, y: 0.5
-      });
-
-      const tests = [
-        {
-          name: "You can hear nearby Alex in workspace",
-          actual: engine.canHear("You", "Alex"),
-          expected: true
-        },
-        {
-          name: "You cannot hear Sam in another room",
-          actual: engine.canHear("You", "Sam"),
-          expected: false
-        },
-        {
-          name: "Sam can hear Riya in the same meeting room",
-          actual: engine.canHear("Sam", "Riya"),
-          expected: true
-        },
-        {
-          name: "Sam cannot hear Max in another meeting room",
-          actual: engine.canHear("Sam", "Max"),
-          expected: false
+    runButton.addEventListener("click", () => {
+      try {
+        if (typeof window.ProxiSpeakAudioEngine !== "function") {
+          throw new Error(
+            "Audio engine not found. Check that audio-engine.js exists and is saved."
+          );
         }
-      ];
 
-      let passed = 0;
+        // Create a fresh engine for every test run.
+        const engine = new window.ProxiSpeakAudioEngine();
 
-      const lines = tests.map(test => {
-        const success = test.actual === test.expected;
-        if (success) passed++;
+        // Register the participants.
+        engine.addParticipant("You", {
+          roomId: "workspace",
+          x: 0.2,
+          y: 0.2
+        });
 
-        return `${success ? "PASS" : "FAIL"} — ${test.name}`;
-      });
+        engine.addParticipant("Alex", {
+          roomId: "workspace",
+          x: 0.3,
+          y: 0.2
+        });
 
-      lines.push("");
-      lines.push(`Result: ${passed}/${tests.length} tests passed.`);
-      output.textContent = lines.join("\n");
+        engine.addParticipant("Sam", {
+          roomId: "meetingRoom1",
+          x: 0.5,
+          y: 0.5
+        });
+
+        engine.addParticipant("Riya", {
+          roomId: "meetingRoom1",
+          x: 0.6,
+          y: 0.5
+        });
+
+        engine.addParticipant("Max", {
+          roomId: "meetingRoom2",
+          x: 0.5,
+          y: 0.5
+        });
+
+        // Test 1: Nearby workspace participants can hear each other.
+        const test1 = engine.canHear("You", "Alex");
+
+        // Test 2: Workspace participants cannot hear a separate room.
+        const test2 = engine.canHear("You", "Sam");
+
+        // Test 3: Participants in the same meeting room can hear each other.
+        const test3 = engine.canHear("Sam", "Riya");
+
+        // Test 4: Different meeting rooms are isolated.
+        const test4 = engine.canHear("Sam", "Max");
+
+        // Test 5: Alex enters Riya's meeting room.
+        engine.moveParticipant("Alex", "meetingRoom1");
+
+        const test5 = engine.canHear("Riya", "Alex");
+
+        // Test 6: Alex leaves the meeting room.
+        engine.moveParticipant("Alex", "workspace");
+
+        const test6 = engine.canHear("Riya", "Alex");
+
+        // Test 7: A muted participant cannot be heard.
+        engine.moveParticipant("Alex", "meetingRoom1");
+        engine.setMuted("Alex", true);
+
+        const test7 = engine.canHear("Riya", "Alex");
+
+        const tests = [
+          {
+            name: "Nearby workspace participants can hear each other",
+            actual: test1,
+            expected: true
+          },
+          {
+            name: "Workspace cannot hear participants in another room",
+            actual: test2,
+            expected: false
+          },
+          {
+            name: "Same meeting room participants can hear each other",
+            actual: test3,
+            expected: true
+          },
+          {
+            name: "Different meeting rooms are isolated",
+            actual: test4,
+            expected: false
+          },
+          {
+            name: "Alex becomes audible after entering Riya's room",
+            actual: test5,
+            expected: true
+          },
+          {
+            name: "Alex becomes inaudible after leaving Riya's room",
+            actual: test6,
+            expected: false
+          },
+          {
+            name: "Muted participants cannot be heard",
+            actual: test7,
+            expected: false
+          }
+        ];
+
+        let passed = 0;
+
+        const lines = tests.map((test, index) => {
+          const success = test.actual === test.expected;
+
+          if (success) {
+            passed++;
+          }
+
+          return `${success ? "PASS" : "FAIL"} — Test ${index + 1}: ${test.name}`;
+        });
+
+        lines.push("");
+        lines.push(`Result: ${passed}/${tests.length} tests passed.`);
+
+        if (passed === tests.length) {
+          lines.push("All room-policy tests passed!");
+        } else {
+          lines.push("Some tests failed. Check audio-engine.js.");
+        }
+
+        output.textContent = lines.join("\n");
+
+      } catch (error) {
+        console.error("ProxiSpeak test error:", error);
+
+        output.textContent =
+          "ERROR: " + error.message +
+          "\n\nCheck that audio-engine.js is saved and has no syntax errors.";
+      }
     });
   </script>
 </body>
