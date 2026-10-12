@@ -1,0 +1,53 @@
+
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>ProxiSpeak | Audio Prototype</title>
+  <link rel="stylesheet" href="style.css" />
+</head>
+<body>
+  <main class="app">
+    <p class="eyebrow">PROXISPEAK · DAY 1</p>
+    <h1>Spatial Audio Lab</h1>
+    <p class="subtitle">
+      Experiment with how sound changes as avatars move apart.
+    </p>
+
+    <section class="panel">
+      <div class="status-row">
+        <span>Audio status</span>
+        <span id="status" class="status">Stopped</span>
+      </div>
+
+      <div class="controls">
+        <button id="playBtn">▶ Play sound</button>
+        <button id="stopBtn" class="secondary">■ Stop</button>
+      </div>
+
+      <label for="distance">Simulated avatar distance</label>
+      <div class="distance-row">
+        <input id="distance" type="range" min="0" max="500"
+          value="50" step="1" />
+        <strong><span id="distanceValue">50</span> px</strong>
+      </div>
+
+      <div class="meter">
+        <div class="meter-fill" id="volumeBar"></div>
+      </div>
+      <div class="status-row small">
+        <span>Relative volume</span>
+        <strong id="volumeValue">90%</strong>
+      </div>
+    </section>
+
+    <p class="note">
+      Prototype only: simulated distance and generated audio.
+      No microphone or network connection is used.
+    </p>
+  </main>
+
+  <script src="script.js"></script>
+</body>
+</html>
