@@ -1,0 +1,105 @@
+
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>ProxiSpeak Room Audio Test</title>
+  <style>
+    body {
+      font-family: Arial, sans-serif;
+      background: #101820;
+      color: #f3f6fa;
+      padding: 24px;
+      max-width: 700px;
+      margin: auto;
+    }
+    button {
+      padding: 10px 14px;
+      margin: 5px;
+      border: 0;
+      border-radius: 8px;
+      cursor: pointer;
+    }
+    pre {
+      background: #202c38;
+      padding: 16px;
+      border-radius: 10px;
+      white-space: pre-wrap;
+      line-height: 1.6;
+    }
+  </style>
+</head>
+<body>
+  <h1>ProxiSpeak Room Test</h1>
+  <p>Testing who can hear whom under our room rules.</p>
+
+  <button id="runTests">Run Room Tests</button>
+  <pre id="results">Click "Run Room Tests" to begin.</pre>
+
+  <script src="audio-engine.js"></script>
+  <script>
+    const output = document.getElementById("results");
+
+    document.getElementById("runTests").addEventListener("click", () => {
+      const engine = new window.ProxiSpeakAudioEngine();
+
+      engine.addParticipant("You", {
+        roomId: "workspace", x: 0.2, y: 0.2
+      });
+
+      engine.addParticipant("Alex", {
+        roomId: "workspace", x: 0.3, y: 0.2
+      });
+
+      engine.addParticipant("Sam", {
+        roomId: "meetingRoom1", x: 0.5, y: 0.5
+      });
+
+      engine.addParticipant("Riya", {
+        roomId: "meetingRoom1", x: 0.6, y: 0.5
+      });
+
+      engine.addParticipant("Max", {
+        roomId: "meetingRoom2", x: 0.5, y: 0.5
+      });
+
+      const tests = [
+        {
+          name: "You can hear nearby Alex in workspace",
+          actual: engine.canHear("You", "Alex"),
+          expected: true
+        },
+        {
+          name: "You cannot hear Sam in another room",
+          actual: engine.canHear("You", "Sam"),
+          expected: false
+        },
+        {
+          name: "Sam can hear Riya in the same meeting room",
+          actual: engine.canHear("Sam", "Riya"),
+          expected: true
+        },
+        {
+          name: "Sam cannot hear Max in another meeting room",
+          actual: engine.canHear("Sam", "Max"),
+          expected: false
+        }
+      ];
+
+      let passed = 0;
+
+      const lines = tests.map(test => {
+        const success = test.actual === test.expected;
+        if (success) passed++;
+
+        return `${success ? "PASS" : "FAIL"} — ${test.name}`;
+      });
+
+      lines.push("");
+      lines.push(`Result: ${passed}/${tests.length} tests passed.`);
+      output.textContent = lines.join("\n");
+    });
+  </script>
+</body>
+</html>
