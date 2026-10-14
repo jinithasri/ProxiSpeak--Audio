@@ -64,9 +64,9 @@
     and mute behavior.
   </p>
 
-  <button id="runTests">Run All 7 Tests</button>
+  <button id="runTests">Run All 10 Tests</button>
 
-  <pre id="results" aria-live="polite">Click "Run All 7 Tests" to begin.</pre>
+  <pre id="results" aria-live="polite">Click "Run All 10 Tests" to begin.</pre>
 
   <!-- Load the room-aware audio policy -->
   <script src="./audio-engine.js"></script>
@@ -145,43 +145,68 @@
 
         const test7 = engine.canHear("Riya", "Alex");
 
-        const tests = [
-          {
-            name: "Nearby workspace participants can hear each other",
-            actual: test1,
-            expected: true
-          },
-          {
-            name: "Workspace cannot hear participants in another room",
-            actual: test2,
-            expected: false
-          },
-          {
-            name: "Same meeting room participants can hear each other",
-            actual: test3,
-            expected: true
-          },
-          {
-            name: "Different meeting rooms are isolated",
-            actual: test4,
-            expected: false
-          },
-          {
-            name: "Alex becomes audible after entering Riya's room",
-            actual: test5,
-            expected: true
-          },
-          {
-            name: "Alex becomes inaudible after leaving Riya's room",
-            actual: test6,
-            expected: false
-          },
-          {
-            name: "Muted participants cannot be heard",
-            actual: test7,
-            expected: false
-          }
-        ];
+       const tests = [
+  {
+    name: "Nearby workspace participants can hear each other",
+    actual: test1,
+    expected: true
+  },
+  {
+    name: "Workspace cannot hear participants in another room",
+    actual: test2,
+    expected: false
+  },
+  {
+    name: "Same meeting room participants can hear each other",
+    actual: test3,
+    expected: true
+  },
+  {
+    name: "Different meeting rooms are isolated",
+    actual: test4,
+    expected: false
+  },
+  {
+    name: "Alex becomes audible after entering Riya's room",
+    actual: test5,
+    expected: true
+  },
+  {
+    name: "Alex becomes inaudible after leaving Riya's room",
+    actual: test6,
+    expected: false
+  },
+  {
+    name: "Muted participants cannot be heard",
+    actual: test7,
+    expected: false
+  },
+  {
+    name: "Unknown participants cannot be heard",
+    actual: engine.canHear("Unknown", "Riya"),
+    expected: false
+  },
+  {
+    name: "Unmuting restores audibility",
+    actual: (() => {
+      engine.setMuted("Alex", false);
+      return engine.canHear("Riya", "Alex");
+    })(),
+    expected: true
+  },
+  {
+    name: "Invalid room is rejected",
+    actual: (() => {
+      try {
+        engine.moveParticipant("Alex", "unknownRoom");
+        return false;
+      } catch {
+        return true;
+      }
+    })(),
+    expected: true
+  }
+];
 
         let passed = 0;
 
