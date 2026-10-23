@@ -64,9 +64,9 @@
     and mute behavior.
   </p>
 
-  <button id="runTests">Run All 10 Tests</button>
+  <button id="runTests">Run All 13 Tests</button>
 
-  <pre id="results" aria-live="polite">Click "Run All 10 Tests" to begin.</pre>
+  <pre id="results" aria-live="polite">Click "Run All 13 Tests" to begin.</pre>
 
   <!-- Load the room-aware audio policy -->
   <script src="./audio-engine.js"></script>
@@ -145,7 +145,8 @@
 
         const test7 = engine.canHear("Riya", "Alex");
 
-       const tests = [
+       
+const tests = [
   {
     name: "Nearby workspace participants can hear each other",
     actual: test1,
@@ -205,8 +206,34 @@
       }
     })(),
     expected: true
+  },
+  {
+    name: "New participant can join the office",
+    actual: (() => {
+      engine.addParticipant("NewGuest", {
+        roomId: "workspace",
+        x: 0.25,
+        y: 0.25
+      });
+      return engine.getParticipant("NewGuest") !== null;
+    })(),
+    expected: true
+  },
+  {
+    name: "Participant can leave the office",
+    actual: (() => {
+      return engine.removeParticipant("NewGuest") &&
+        engine.getParticipant("NewGuest") === null;
+    })(),
+    expected: true
+  },
+  {
+    name: "Leaving an unknown participant is handled safely",
+    actual: engine.removeParticipant("UnknownGuest"),
+    expected: false
   }
 ];
+
 
         let passed = 0;
 

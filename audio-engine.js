@@ -1,7 +1,7 @@
 
 /*
  * ProxiSpeak — Room-Aware Audio Engine
- * Version 1: Room membership and audio policy
+ * Version 2: Room membership, audio policy, and participant departure
  *
  * This module defines WHO is allowed to hear WHOM.
  * Actual microphone/WebRTC routing will be integrated later.
@@ -25,15 +25,21 @@ class ProxiSpeakAudioEngine {
     };
   }
 
-  // Register a participant and their current location.
+  // Register a participant when they join the virtual office.
   addParticipant(id, options = {}) {
     if (!id) {
       throw new Error("Participant ID is required.");
     }
 
+    const roomId = options.roomId ?? "workspace";
+
+    if (!this.zones[roomId]) {
+      throw new Error(`Unknown zone: ${roomId}`);
+    }
+
     this.participants.set(id, {
       id,
-      roomId: options.roomId || "workspace",
+      roomId,
       x: options.x ?? 0.5,
       y: options.y ?? 0.5,
       muted: options.muted ?? false
@@ -46,6 +52,16 @@ class ProxiSpeakAudioEngine {
   getParticipant(id) {
     const participant = this.participants.get(id);
     return participant ? { ...participant } : null;
+  }
+
+  // Remove a participant when they leave the virtual office.
+  removeParticipant(id) {
+    if (!this.participants.has(id)) {
+      return false;
+    }
+
+    this.participants.delete(id);
+    return true;
   }
 
   // Move a participant into another zone.
@@ -73,7 +89,7 @@ class ProxiSpeakAudioEngine {
     return this.getParticipant(id);
   }
 
-  // Mute or unmute a participant.
+  // Mute or unmute a participant in the audio policy.
   setMuted(id, muted) {
     const participant = this.participants.get(id);
 
@@ -98,8 +114,10 @@ class ProxiSpeakAudioEngine {
       return false;
     }
 
-    // People in the same isolated meeting room can hear each other.
-    if (this.zones[listener.roomId].type === "isolated") {
+    const zone = this.zones[listener.roomId];
+
+    // Participants in the same isolated meeting room can hear each other.
+    if (zone.type === "isolated") {
       return true;
     }
 
@@ -109,7 +127,7 @@ class ProxiSpeakAudioEngine {
       listener.y - speaker.y
     );
 
-    return distance <= this.zones[listener.roomId].maxDistance;
+    return distance <= zone.maxDistance;
   }
 
   // Return everyone a participant is currently allowed to hear.
@@ -119,7 +137,7 @@ class ProxiSpeakAudioEngine {
     );
   }
 
-  // Get a simple volume factor for open-workspace audio.
+  // Get a volume factor for open-workspace audio.
   getVolume(listenerId, speakerId) {
     if (!this.canHear(listenerId, speakerId)) {
       return 0;
@@ -127,8 +145,10 @@ class ProxiSpeakAudioEngine {
 
     const listener = this.participants.get(listenerId);
     const speaker = this.participants.get(speakerId);
+    const zone = this.zones[listener.roomId];
 
-    if (this.zones[listener.roomId].type === "isolated") {
+    // Meeting-room participants have full policy volume.
+    if (zone.type === "isolated") {
       return 1;
     }
 
@@ -137,10 +157,7 @@ class ProxiSpeakAudioEngine {
       listener.y - speaker.y
     );
 
-    return Math.max(
-      0,
-      1 - distance / this.zones[listener.roomId].maxDistance
-    );
+    return Math.max(0, 1 - distance / zone.maxDistance);
   }
 }
 
