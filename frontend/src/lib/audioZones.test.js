@@ -24,3 +24,37 @@ test('positions outside all rooms are not audio-eligible', () => {
   assert.equal(p.roomId, null);
   assert.equal(p.nearbyPeers.length, 0);
 });
+test('nearby peers in different rooms are excluded', () => {
+  const preview = getAudioZonePreview({ x: 790, y: 200 }, [
+    { id: 'ideation-peer', x: 800, y: 200 },
+  ]);
+
+  assert.equal(preview.roomId, null);
+  assert.equal(preview.nearbyPeers.length, 0);
+});
+
+test('Ideation Lab allows distant participants in the same room', () => {
+  const preview = getAudioZonePreview({ x: 810, y: 60 }, [
+    { id: 'distant-peer', x: 1140, y: 300 },
+  ]);
+
+  assert.equal(preview.roomId, 'ideation');
+  assert.equal(preview.policy, 'isolated');
+  assert.deepEqual(
+    preview.nearbyPeers.map((peer) => peer.id),
+    ['distant-peer']
+  );
+});
+
+test('Focus Lounge allows distant participants in the same room', () => {
+  const preview = getAudioZonePreview({ x: 810, y: 370 }, [
+    { id: 'distant-peer', x: 1140, y: 650 },
+  ]);
+
+  assert.equal(preview.roomId, 'lounge');
+  assert.equal(preview.policy, 'isolated');
+  assert.deepEqual(
+    preview.nearbyPeers.map((peer) => peer.id),
+    ['distant-peer']
+  );
+});
