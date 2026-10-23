@@ -105,7 +105,15 @@ export default function AudioControlPanel({ position, people, connection }) {
 
     <div className="audio-ui-grid">
       <div className="audio-ui-cell"><small>YOUR ROOM</small><strong>{zone.roomLabel}</strong><span>{zone.roomId ? `Room ID: ${zone.roomId}` : 'No audio room assigned'}</span></div>
-      <div className="audio-ui-cell"><small>NEARBY IN SAME ROOM</small><strong>{zone.nearbyPeers.length} {zone.nearbyPeers.length === 1 ? 'player' : 'players'}</strong><span>Within {zone.radius} world units · {backendOnline ? 'live positions' : 'demo positions'}</span></div>
+      <div className="audio-ui-cell"><small>NEARBY IN SAME ROOM</small><strong>{zone.nearbyPeers.length} {zone.nearbyPeers.length === 1 ? 'player' : 'players'}</strong>
+<span>
+  {zone.policy === 'isolated'
+    ? 'All participants in this room'
+    : `Within ${zone.radius} world units`}
+  {' · '}
+  {backendOnline ? 'live positions' : 'demo positions'}
+</span>
+</div>
       <div className="audio-ui-cell"><small>BACKEND SIGNALING</small><strong className={backendOnline ? 'audio-ui-online' : ''}>{backendOnline ? 'Backend live' : 'Local demo'}</strong><span>{backendOnline ? <><Wifi size={12}/> Movement socket connected</> : <><WifiOff size={12}/> Audio still not connected</>}</span></div>
       <div className="audio-ui-cell"><small>MICROPHONE</small><strong>{micLabel}</strong><span><Shield size={12}/> Permission: {permission}</span></div>
     </div>
