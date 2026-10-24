@@ -246,20 +246,15 @@ const socket = useRef(null);
 const audioEngine = useRef(null);
 const localStreamRef = useRef(null);
 
-const movement = useMovement(broadcast);
-const people = connection === 'online' ? livePeople : demoPeople;
-
-const peopleRef = useRef(people);
-const positionRef = useRef(movement.position);
-const sessionId = useRef(
-  `bharath-${Math.random().toString(36).slice(2, 9)}`
-);
-
 const notify = useCallback((message) => {
   setToast(message);
   clearTimeout(toastTimer.current);
   toastTimer.current = window.setTimeout(() => setToast(''), 3600);
 }, []);
+const sessionId = useRef(
+  `bharath-${Math.random().toString(36).slice(2, 9)}`
+);
+
 
 const broadcast = useCallback((p) => {
   if (socket.current?.connected) {
@@ -271,6 +266,12 @@ const broadcast = useCallback((p) => {
     });
   }
 }, []);
+
+const movement = useMovement(broadcast);
+const people = connection === 'online' ? livePeople : demoPeople;
+
+const peopleRef = useRef(people);
+const positionRef = useRef(movement.position);
 
 peopleRef.current = people;
 positionRef.current = movement.position;
