@@ -8,7 +8,13 @@ import './audio-controls.css';
  * Socket.IO or RTCPeerConnection side effects. It does not transmit audio.
  * The team lead can later attach the agreed room-aware audio engine.
  */
-export default function AudioControlPanel({ position, people, connection }) {
+export default function AudioControlPanel({
+  position,
+  people,
+  connection,
+  onStreamReady,
+  onStreamStopped,
+}) {
   const [micStatus, setMicStatus] = useState('off'); // off | requesting | ready | muted | error
   const [permission, setPermission] = useState('Not requested');
   const [error, setError] = useState('');
@@ -20,15 +26,24 @@ export default function AudioControlPanel({ position, people, connection }) {
   const backendOnline = connection === 'online';
 
   const release = useCallback(() => {
-    requestId.current += 1; // invalidate in-flight getUserMedia responses
-    if (streamRef.current) {
-      streamRef.current.getTracks().forEach(track => track.stop());
-      streamRef.current = null;
-    }
-    trackRef.current = null;
-    if (mountedRef.current) setMicStatus('off');
-  }, []);
+  requestId.current += 1; // Invalidate pending microphone requests
 
+  if (streamRef.current) {
+    streamRef.current.getTracks().forEach((track) => {
+      track.stop();
+    });
+    streamRef.current = null;
+  }
+
+  trackRef.current = null;
+
+  // Notify App.jsx that the microphone stream has stopped.
+  onStreamStopped?.();
+
+  if (mountedRef.current) {
+    setMicStatus('off');
+  }
+}, [onStreamStopped]);
   useEffect(() => {
     mountedRef.current = true;
     return () => {
@@ -41,51 +56,88 @@ export default function AudioControlPanel({ position, people, connection }) {
   }, []);
 
   const enableMicrophone = async () => {
-    if (micStatus === 'requesting' || streamRef.current) return;
-    setError('');
-    if (!navigator.mediaDevices?.getUserMedia || !window.isSecureContext) {
-      setError('Microphone requires HTTPS or localhost and a compatible browser.');
-      setMicStatus('error');
+  if (micStatus === 'requesting' || streamRef.current) return;
+
+  setError('');
+
+  if (
+    !navigator.mediaDevices?.getUserMedia ||
+    !window.isSecureContext
+  ) {
+    setError(
+      'Microphone requires HTTPS or localhost and a compatible browser.'
+    );
+    setMicStatus('error');
+    return;
+  }
+
+  const id = ++requestId.current;
+  setMicStatus('requesting');
+
+  try {
+    const stream = await navigator.mediaDevices.getUserMedia({
+      audio: {
+        echoCancellation: true,
+        noiseSuppression: true,
+        autoGainControl: true,
+      },
+      video: false,
+    });
+
+    if (!mountedRef.current || id !== requestId.current) {
+      stream.getTracks().forEach((track) => track.stop());
       return;
     }
-    const id = ++requestId.current;
-    setMicStatus('requesting');
-    try {
-      const stream = await navigator.mediaDevices.getUserMedia({
-        audio: { echoCancellation: true, noiseSuppression: true, autoGainControl: true },
-        video: false,
-      });
-      if (!mountedRef.current || id !== requestId.current) {
-        stream.getTracks().forEach(track => track.stop());
-        return;
-      }
-      const track = stream.getAudioTracks()[0];
-      if (!track) {
-        stream.getTracks().forEach(t => t.stop());
-        throw new Error('No audio input track available.');
-      }
-      track.enabled = true;
-      track.onended = () => {
-        if (trackRef.current !== track) return;
-        streamRef.current = null;
-        trackRef.current = null;
-        if (mountedRef.current) {
-          setMicStatus('off');
-          setPermission('Microphone stopped');
-        }
-      };
-      streamRef.current = stream;
-      trackRef.current = track;
-      setPermission('Allowed');
-      setMicStatus('ready');
-    } catch (err) {
-      if (!mountedRef.current || id !== requestId.current) return;
-      const rejected = err?.name === 'NotAllowedError' || err?.name === 'PermissionDeniedError';
-      setPermission(rejected ? 'Denied' : 'Unavailable');
-      setError(rejected ? 'Permission denied. Enable microphone access in browser settings to retry.' : (err?.message || 'Could not access microphone.'));
-      setMicStatus('error');
+
+    const track = stream.getAudioTracks()[0];
+
+    if (!track) {
+      stream.getTracks().forEach((t) => t.stop());
+      throw new Error('No audio input track available.');
     }
-  };
+
+    track.enabled = true;
+
+    track.onended = () => {
+      if (trackRef.current !== track) return;
+
+      streamRef.current = null;
+      trackRef.current = null;
+
+      onStreamStopped?.();
+
+      if (mountedRef.current) {
+        setMicStatus('off');
+        setPermission('Microphone stopped');
+      }
+    };
+
+    streamRef.current = stream;
+    trackRef.current = track;
+
+    // Pass the existing microphone stream to App.jsx for WebRTC.
+    onStreamReady?.(stream);
+
+    setPermission('Allowed');
+    setMicStatus('ready');
+  } catch (err) {
+    if (!mountedRef.current || id !== requestId.current) return;
+
+    const rejected =
+      err?.name === 'NotAllowedError' ||
+      err?.name === 'PermissionDeniedError';
+
+    setPermission(rejected ? 'Denied' : 'Unavailable');
+
+    setError(
+      rejected
+        ? 'Permission denied. Enable microphone access in browser settings to retry.'
+        : err?.message || 'Could not access microphone.'
+    );
+
+    setMicStatus('error');
+  }
+};
 
   const toggleMute = () => {
     if (!trackRef.current || !streamRef.current) return;

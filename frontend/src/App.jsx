@@ -14,7 +14,7 @@ import { useMovement } from './hooks/useMovement.js';
 import { distance, inRange } from './lib/movement.js';
 import { MY_PLAYER, PROXIMITY_RADIUS, SPACES, TEAM, WORLD, simulatedTeam } from './lib/world.js';
 import { createSignalClient, EVENTS, parsePlayers } from './services/signaling.js';
-
+import { createWebRTCAudio } from './services/webrtcAudio.js';
 const NAV = [
   { id: 'workspace', label: 'Live workspace', icon: Grid2X2 },
   { id: 'team', label: 'Team directory', icon: Users },
@@ -122,7 +122,25 @@ function PresencePanel({ people, position, connection, selected, setSelected, fi
 function RadarIcon() { return <Crosshair size={20}/>; }
 function FeatureCard({ icon: Icon, value, title, note, accent = '' }) { return <div className={`feature-card ${accent}`}><span className="feature-ico"><Icon size={17}/></span><div><strong>{value}</strong><span>{title}</span><small>{note}</small></div></div>; }
 
-function WorkspaceView({ movement, people, connection, setView, showRadius, setShowRadius, showTrail, setShowTrail, guide, onShare, notify, selected, setSelected, filter, setFilter }) {
+function WorkspaceView({
+  movement,
+  people,
+  connection,
+  setView,
+  showRadius,
+  setShowRadius,
+  showTrail,
+  setShowTrail,
+  guide,
+  onShare,
+  notify,
+  selected,
+  setSelected,
+  filter,
+  setFilter,
+  onStreamReady,
+  onStreamStopped,
+}) {
   const frameRef = useRef(null);
   const [mode,setMode] = useState('3d');
   const [focusRoom,setFocusRoom] = useState('all');
@@ -163,7 +181,13 @@ function WorkspaceView({ movement, people, connection, setView, showRadius, setS
         <div className="canvas-statusbar"><div><MapPin size={15}/><strong>X {Math.round(movement.position.x)}</strong><span>/</span><strong>Y {Math.round(movement.position.y)}</strong></div><div className="statusbar-right"><span className={`walking-dot ${movement.movement !== 'Idle' ? 'walking-active' : ''}`}/>{movement.movement}<i/>WASD · DRAG CAMERA · SCROLL ZOOM</div></div>
       </div>
       <div className="movement-footer"><div className="footer-desktop"><span className="footer-foot-icon"><Keyboard size={17}/></span><b>Controls</b><span>WASD / arrow keys · Drag to orbit · Scroll to zoom</span></div><button onClick={guide}>How it works <ArrowUpRight size={14}/></button></div>
-      <AudioControlPanel position={movement.position} people={people} connection={connection}/>
+      <AudioControlPanel
+  position={movement.position}
+  people={people}
+  connection={connection}
+  onStreamReady={onStreamReady}
+  onStreamStopped={onStreamStopped}
+/>
       <ArrowPad hold={movement.hold}/>
       <div className="feature-grid">
         <FeatureCard icon={Route} value={Math.round(movement.metersTravelled).toLocaleString()} title="World units travelled" note="Tracked in this session" accent="mint-card"/>
@@ -218,12 +242,69 @@ export default function App() {
   const [filter,setFilter] = useState('');
   const [toast,setToast] = useState('');
   const toastTimer=useRef(null);
-  const socket=useRef(null);
-  const sessionId=useRef(`bharath-${Math.random().toString(36).slice(2,9)}`);
-  const notify=useCallback((message)=>{setToast(message);clearTimeout(toastTimer.current);toastTimer.current=window.setTimeout(()=>setToast(''),3600);},[]);
-  const broadcast=useCallback((p)=>{if(socket.current?.connected)socket.current.emit(EVENTS.move,{roomId:'main',id:sessionId.current,x:p.x,y:p.y});},[]);
-  const movement=useMovement(broadcast);
-  const people=connection==='online'?livePeople:demoPeople;
+const socket = useRef(null);
+const audioEngine = useRef(null);
+const localStreamRef = useRef(null);
+
+const movement = useMovement(broadcast);
+const people = connection === 'online' ? livePeople : demoPeople;
+
+const peopleRef = useRef(people);
+const positionRef = useRef(movement.position);
+const sessionId = useRef(
+  `bharath-${Math.random().toString(36).slice(2, 9)}`
+);
+
+const notify = useCallback((message) => {
+  setToast(message);
+  clearTimeout(toastTimer.current);
+  toastTimer.current = window.setTimeout(() => setToast(''), 3600);
+}, []);
+
+const broadcast = useCallback((p) => {
+  if (socket.current?.connected) {
+    socket.current.emit(EVENTS.move, {
+      roomId: 'main',
+      id: sessionId.current,
+      x: p.x,
+      y: p.y,
+    });
+  }
+}, []);
+
+peopleRef.current = people;
+positionRef.current = movement.position;
+
+
+const handleStreamReady = useCallback((stream) => {
+  localStreamRef.current = stream;
+
+  if (socket.current?.connected) {
+    audioEngine.current?.close();
+
+    audioEngine.current = createWebRTCAudio({
+      socket: socket.current,
+      localStream: stream,
+      getLocalPosition: () => positionRef.current,
+      getParticipants: () => peopleRef.current,
+      onRemoteStream: (peerId, remoteStream) => {
+        console.log('Remote audio stream received:', peerId, remoteStream);
+      },
+      onRemoteStreamRemoved: (peerId) => {
+        console.log('Remote audio stream removed:', peerId);
+      },
+      onError: (error) => console.error('WebRTC audio error:', error),
+    });
+
+    audioEngine.current.syncPeers();
+  }
+}, []);
+
+const handleStreamStopped = useCallback(() => {
+  localStreamRef.current = null;
+  audioEngine.current?.close();
+  audioEngine.current = null;
+}, []);
 
   useEffect(()=>{
     const timer=setInterval(()=>{setDemoPeople(simulatedTeam(performance.now()/1000));},240);
@@ -244,11 +325,34 @@ export default function App() {
     const s=createSignalClient(); socket.current=s;
     s.on('connect',()=>{
       if(socket.current!==s)return;
-      setConnection('online');setLivePeople([]);
+      setConnection('online');
+setLivePeople([]);
+
+if (localStreamRef.current) {
+  audioEngine.current?.close();
+
+  audioEngine.current = createWebRTCAudio({
+    socket: s,
+    localStream: localStreamRef.current,
+    getLocalPosition: () => positionRef.current,
+    getParticipants: () => peopleRef.current,
+    onRemoteStream: (peerId, remoteStream) => {
+      console.log('Remote audio stream received:', peerId, remoteStream);
+    },
+    onRemoteStreamRemoved: (peerId) => {
+      console.log('Remote audio stream removed:', peerId);
+    },
+    onError: (error) => console.error('WebRTC audio error:', error),
+  });
+}
       s.emit(EVENTS.join,{roomId:'main',player:{...MY_PLAYER,id:sessionId.current,...movement.positionRef.current}});
       notify('Connected. Awaiting backend participant updates.');
     });
-    s.on(EVENTS.update,(players)=>{if(socket.current===s)setLivePeople(parsePlayers(players,sessionId.current));});
+    s.on(EVENTS.update, (players) => {
+  if (socket.current !== s) return;
+
+  setLivePeople(parsePlayers(players, sessionId.current));
+});
     s.on(EVENTS.left,({id}={})=>{if(typeof id==='string')setLivePeople(prev=>prev.filter(p=>p.id!==id));});
     s.on('connect_error',()=>{
       if(socket.current===s){s.disconnect();socket.current=null;setConnection('demo');setLivePeople([]);notify('Backend unavailable — local demo still works.');}
@@ -265,7 +369,8 @@ export default function App() {
   return <div className="app-layout">
     <Sidebar view={view} setView={setView} open={menuOpen} setOpen={setMenuOpen} openGuide={()=>setGuideOpen(true)}/>
     <main className="main-area"><TitleBar view={view} connection={connection} onConnect={toggleBackend} onMenu={()=>setMenuOpen(true)} onGuide={()=>setGuideOpen(true)}/>
-      {view==='workspace' && <WorkspaceView movement={movement} people={people} connection={connection} setView={setView} showRadius={showRadius} setShowRadius={setShowRadius} showTrail={showTrail} setShowTrail={setShowTrail} guide={()=>setGuideOpen(true)} onShare={share} notify={notify} selected={selected} setSelected={setSelected} filter={filter} setFilter={setFilter}/>}
+      {view==='workspace' && <WorkspaceView movement={movement} people={people} connection={connection} onStreamReady={handleStreamReady}
+onStreamStopped={handleStreamStopped} setView={setView} showRadius={showRadius} setShowRadius={setShowRadius} showTrail={showTrail} setShowTrail={setShowTrail} guide={()=>setGuideOpen(true)} onShare={share} notify={notify} selected={selected} setSelected={setSelected} filter={filter} setFilter={setFilter}/>}
       {view==='team' && <TeamView people={people} connection={connection} pos={movement.position}/>}
       {view==='sprint' && <SprintView onGuide={()=>setGuideOpen(true)}/>}
     </main>
