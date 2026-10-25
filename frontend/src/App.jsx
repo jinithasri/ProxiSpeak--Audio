@@ -277,35 +277,68 @@ peopleRef.current = people;
 positionRef.current = movement.position;
 
 
+
 const handleStreamReady = useCallback((stream) => {
   localStreamRef.current = stream;
 
-  if (socket.current?.connected) {
-    audioEngine.current?.close();
+  console.log('[App] Microphone ready', {
+    audioTracks: stream.getAudioTracks().length,
+    socketConnected: socket.current?.connected,
+  });
 
-    audioEngine.current = createWebRTCAudio({
-      socket: socket.current,
-      localStream: stream,
-      getLocalPosition: () => positionRef.current,
-      getParticipants: () => peopleRef.current,
-      onRemoteStream: (peerId, remoteStream) => {
-        console.log('Remote audio stream received:', peerId, remoteStream);
-      },
-      onRemoteStreamRemoved: (peerId) => {
-        console.log('Remote audio stream removed:', peerId);
-      },
-      onError: (error) => console.error('WebRTC audio error:', error),
-    });
-
-    audioEngine.current.syncPeers();
+  // If the backend is not connected yet, the connect callback
+  // will initialize the engine when the connection is established.
+  if (!socket.current?.connected) {
+    console.log('[App] Waiting for backend connection before starting WebRTC');
+    return;
   }
+
+  audioEngine.current?.close();
+
+  audioEngine.current = createWebRTCAudio({
+    socket: socket.current,
+    localStream: stream,
+    getLocalPosition: () => positionRef.current,
+    getParticipants: () => peopleRef.current,
+
+    onRemoteStream: (peerId, remoteStream) => {
+      let audio = document.getElementById(`remote-audio-${peerId}`);
+
+      if (!audio) {
+        audio = document.createElement('audio');
+        audio.id = `remote-audio-${peerId}`;
+        audio.autoplay = true;
+        audio.playsInline = true;
+        document.body.appendChild(audio);
+      }
+
+      audio.srcObject = remoteStream;
+      audio.muted = false;
+
+      audio.play().catch((error) => {
+        console.error('[WebRTC] Remote playback failed:', error);
+      });
+    },
+
+    onRemoteStreamRemoved: (peerId) => {
+      const audio = document.getElementById(`remote-audio-${peerId}`);
+
+      if (audio) {
+        audio.pause();
+        audio.srcObject = null;
+        audio.remove();
+      }
+    },
+
+    onError: (error) => {
+      console.error('[WebRTC] Audio error:', error);
+    },
+  });
+
+  console.log('[App] WebRTC engine created');
+  audioEngine.current.syncPeers();
 }, []);
 
-const handleStreamStopped = useCallback(() => {
-  localStreamRef.current = null;
-  audioEngine.current?.close();
-  audioEngine.current = null;
-}, []);
 
   useEffect(()=>{
     const timer=setInterval(()=>{setDemoPeople(simulatedTeam(performance.now()/1000));},240);
@@ -315,6 +348,11 @@ const handleStreamStopped = useCallback(() => {
     const handler=(e)=>{if((e.metaKey||e.ctrlKey)&&e.key.toLowerCase()==='k'){e.preventDefault();setView('workspace');window.setTimeout(()=>document.querySelector('.search-box input')?.focus(),50);}};
     window.addEventListener('keydown',handler);return()=>window.removeEventListener('keydown',handler);
   },[]);
+const handleStreamStopped = useCallback(() => {
+  localStreamRef.current = null;
+  audioEngine.current?.close();
+  audioEngine.current = null;
+}, []);
   const disconnect=()=>{
     // Explicit leave is optional; backend also broadcasts an updated list on disconnect.
     if(socket.current?.connected)socket.current.emit(EVENTS.leave);
@@ -329,6 +367,8 @@ const handleStreamStopped = useCallback(() => {
       setConnection('online');
 setLivePeople([]);
 
+
+
 if (localStreamRef.current) {
   audioEngine.current?.close();
 
@@ -338,11 +378,32 @@ if (localStreamRef.current) {
     getLocalPosition: () => positionRef.current,
     getParticipants: () => peopleRef.current,
     onRemoteStream: (peerId, remoteStream) => {
-      console.log('Remote audio stream received:', peerId, remoteStream);
-    },
+  let audio = document.getElementById(`remote-audio-${peerId}`);
+
+  if (!audio) {
+    audio = document.createElement('audio');
+    audio.id = `remote-audio-${peerId}`;
+    audio.autoplay = true;
+    audio.playsInline = true;
+    document.body.appendChild(audio);
+  }
+
+  audio.srcObject = remoteStream;
+  audio.muted = false;
+
+  audio.play().catch((error) => {
+    console.error('Remote audio playback failed:', error);
+  });
+},
     onRemoteStreamRemoved: (peerId) => {
-      console.log('Remote audio stream removed:', peerId);
-    },
+  const audio = document.getElementById(`remote-audio-${peerId}`);
+
+  if (audio) {
+    audio.pause();
+    audio.srcObject = null;
+    audio.remove();
+  }
+},
     onError: (error) => console.error('WebRTC audio error:', error),
   });
 }
@@ -352,7 +413,18 @@ if (localStreamRef.current) {
     s.on(EVENTS.update, (players) => {
   if (socket.current !== s) return;
 
-  setLivePeople(parsePlayers(players, sessionId.current));
+  const updatedPeople = parsePlayers(players, sessionId.current);
+
+  // Update the list immediately for audio peer discovery.
+  peopleRef.current = updatedPeople;
+  setLivePeople(updatedPeople);
+console.log('[App] Participant update', {
+  count: updatedPeople.length,
+  participants: updatedPeople,
+  audioEngineExists: Boolean(audioEngine.current),
+});
+  // Recheck which participants are eligible for voice.
+  audioEngine.current?.syncPeers();
 });
     s.on(EVENTS.left,({id}={})=>{if(typeof id==='string')setLivePeople(prev=>prev.filter(p=>p.id!==id));});
     s.on('connect_error',()=>{

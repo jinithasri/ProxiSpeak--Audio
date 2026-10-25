@@ -136,7 +136,13 @@ export function createWebRTCAudio({
   }
 
   async function callPeer(peerId) {
-    if (!canHear(peerId) || !socket?.id) return;
+    console.log('[WebRTC] callPeer:', {
+  peerId,
+  socketId: socket?.id,
+  connected: socket?.connected,
+  eligible: canHear(peerId),
+});
+  if (!canHear(peerId) || !socket?.id) return;
 
     // Only one side initiates an offer, preventing simultaneous offers.
     if (socket.id.localeCompare(peerId) > 0) return;
@@ -251,6 +257,11 @@ export function createWebRTCAudio({
   }
 
   function syncPeers() {
+  console.log('[WebRTC] syncPeers called', {
+    connected: socket?.connected,
+    participants: getParticipants?.(),
+    localPosition: getLocalPosition?.(),
+  });
     if (closed || !socket?.connected) return;
 
     const participants = getParticipants?.() || [];
