@@ -105,18 +105,23 @@ export function createWebRTCAudio({
     };
 
     peer.onconnectionstatechange = () => {
-      if (
-        peer.connectionState === 'failed' ||
-        peer.connectionState === 'closed'
-      ) {
-        onRemoteStreamRemoved(peerId);
-      }
+  console.log('[WebRTC] Peer connection state:', {
+    peerId,
+    state: peer.connectionState,
+    iceState: peer.iceConnectionState,
+  });
 
-      if (peer.connectionState === 'failed') {
-        onError(new Error(`WebRTC connection failed for ${peerId}`));
-      }
-    };
+  if (
+    peer.connectionState === 'failed' ||
+    peer.connectionState === 'closed'
+  ) {
+    onRemoteStreamRemoved(peerId);
+  }
 
+  if (peer.connectionState === 'failed') {
+    onError(new Error(`WebRTC connection failed for ${peerId}`));
+  }
+};
     return peer;
   }
 

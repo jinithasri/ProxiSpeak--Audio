@@ -8,7 +8,13 @@ import './audio-controls.css';
  * Socket.IO or RTCPeerConnection side effects. It does not transmit audio.
  * The team lead can later attach the agreed room-aware audio engine.
  */
-export default function AudioControlPanel({ position, people, connection }) {
+export default function AudioControlPanel({
+  position,
+  people,
+  connection,
+  onStreamReady,
+  onStreamStopped,
+})  {
   const [micStatus, setMicStatus] = useState('off'); // off | requesting | ready | muted | error
   const [permission, setPermission] = useState('Not requested');
   const [error, setError] = useState('');
@@ -27,6 +33,7 @@ export default function AudioControlPanel({ position, people, connection }) {
     }
     trackRef.current = null;
     if (mountedRef.current) setMicStatus('off');
+    onStreamStopped?.();
   }, []);
 
   useEffect(() => {
@@ -75,9 +82,12 @@ export default function AudioControlPanel({ position, people, connection }) {
         }
       };
       streamRef.current = stream;
-      trackRef.current = track;
-      setPermission('Allowed');
-      setMicStatus('ready');
+trackRef.current = track;
+
+setPermission('Allowed');
+setMicStatus('ready');
+
+onStreamReady?.(stream);
     } catch (err) {
       if (!mountedRef.current || id !== requestId.current) return;
       const rejected = err?.name === 'NotAllowedError' || err?.name === 'PermissionDeniedError';
