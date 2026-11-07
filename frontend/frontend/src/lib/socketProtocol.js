@@ -1,7 +1,7 @@
 import { WORLD } from './world.js';
 
 /** Proposed socket event names; confirm them with Jeevith. */
-export const EVENTS = Object.freeze({ join: 'player:join', move: 'player:move', update: 'players:update', leave: 'player:left' });
+export const EVENTS = Object.freeze({ join: 'player:join', move: 'player:move', update: 'players:update', leave: 'player:leave' });
 
 /** Pure validated parser: testable with Node without a Socket.IO server. */
 export function parsePlayers(payload, selfId) {
